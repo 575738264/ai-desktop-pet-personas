@@ -1,0 +1,1340 @@
+AI Agent / Character Platform 方向升级详细方案（桌宠与插件市场主线版）
+==================================================================
+
+修订日期：2026-08-16
+文档性质：长期产品与架构方向草案
+当前状态：以本地桌宠、API 聊天和插件市场为产品主线；外部 Harness 仅作为架构参考与远期可选兼容方向
+
+
+一、核心结论
+------------
+
+当前项目不应长期只被定义为“AI 桌宠”，更合适的长期方向是：
+
+    开放式 AI Agent / Character Platform
+    （允许用户组合、运行、管理和分发 AI Agent 与 AI Character 的平台）
+
+桌宠仍然是当前最重要的产品入口，但在长期架构中可被描述为：
+
+    Character Agent + Desktop Environment
+
+当前产品主线不是先建设通用 Harness，而是：
+
+    本地桌宠
+        ↓
+    配置模型 API 后直接聊天
+        ↓
+    从插件市场安装角色资源、Skill、MCP 和能力
+        ↓
+    通过简单预设组合并直接使用
+
+现有本地桌宠已经能够使用模型 API 聊天，这是项目必须保留的低门槛核心体验。平台升级不能要求普通用户先理解 AgentDefinition、Harness、Session、Loop 或插件图才能开始聊天。
+
+项目未来可以支持：
+
+1. 桌面 AI 桌宠
+2. 长期共存的多角色与群聊
+3. Live2D / 3D Character Agent
+4. Galgame / 互动剧情角色
+5. 通用桌面 Agent
+6. Coding / Research 等任务型 Agent
+7. 用户自定义 Agent
+8. 第三方 Skill、MCP、Plugin 和 Capability Provider
+9. 第三方 Character Pack、Agent Blueprint 与 Agent Pack
+10. 不同模型、Planner 和 Environment
+11. 在确有需求时兼容外部 Harness
+
+核心思想从：
+
+    给桌宠增加插件
+
+升级为：
+
+    让用户在统一安全边界内自由组合自己的 Agent / Character
+
+这里的“自由组合”不是自由绕过权限、审批和审计，而是允许用户替换兼容的模型、规划器、能力提供者、记忆、角色资源和运行环境。
+
+DeepSeek Harness 等系统用于帮助项目理解插件化、Provider 替换和开发便利性，但不是本项目的产品模板，也不是第一阶段必须达到的实现标准。
+
+
+二、这不是一次插件市场 UI 改版
+------------------------------
+
+这次方向升级的本质是产品元模型升级，不是简单增加几个市场分类，也不是先做一个 Agent Studio 页面。
+
+当前项目已经具备很多重要基础：
+
+- 版本中立的 Production Agent Runtime
+- Task、状态转换、审批、取消、恢复、Trace 和 Evidence
+- Capability Catalog、Tool Registry 和静态 Skill Registry
+- MCP 接入、参数校验、风险分类和审批链路
+- 外部 Skill 包签名、准入、生命周期、回滚、隔离和 WASM 沙箱
+- Persona、Memory、Relationship、Avatar、Voice 和多角色系统
+- Desktop Runtime World 与角色表现层
+
+当前真正缺少的不是另一个 Agent 循环，而是连接这些模块的稳定中间合同：
+
+1. Agent Definition
+2. Capability Descriptor
+3. Agent Composition Plan
+4. Environment Binding
+5. Agent Blueprint / Agent Pack
+6. 简单、可复用的 Agent / Character Preset
+7. 可插拔 Provider 合同
+
+以下能力属于后续按真实需求逐步增加的高级方向，而不是当前市场升级的前置条件：
+
+- Agent Runtime Profile 与完整插件图
+- 统一 Session Event Stream
+- 外部 Harness Adapter
+- Resume / Fork / Replay
+
+因此正确顺序应当是：先保持本地桌宠 API 聊天稳定，再补最小组合合同和插件市场商品模型，然后逐步增加 Composer、Agent Pack 和开发者能力。不能为了追求通用 Harness 架构而延迟桌宠和插件市场的实际体验。
+
+
+三、需要锁定的三条总原则
+------------------------
+
+原则一：自由组合不是自由绕过治理
+--------------------------------
+
+市场可以允许用户自由选择和替换 Provider，但所有跨越平台安全边界、访问用户资源或产生外部副作用的执行仍必须经过平台的：
+
+- Capability Scope
+- Permission Router
+- 用户审批
+- 调用预算
+- Sandbox / Process Isolation
+- Cancellation / Timeout
+- Audit Log
+- Trace / Evidence
+- 安装、升级、撤销和隔离策略
+
+Agent Pack 不能因为“完整”就绕过其中任何一层。
+
+原则二：单一 Runtime 是单一任务权威，不是单一巨型模块
+------------------------------------------------------
+
+项目不应建立第二套彼此竞争、分别维护任务状态、权限、审批、恢复和最终结果的生产 Agent Runtime。
+
+但这不意味着所有功能都必须堆进现有 Runtime。平台应允许存在多个：
+
+- Planner Adapter
+- Harness Adapter
+- Model Provider
+- Capability Provider
+- Capability Execution Host
+- MCP Host
+- WASM Sandbox Host
+- Memory Provider
+- Environment Runtime
+- Avatar / Voice Runtime
+- Shadow / Experimental Decision Engine
+
+它们可以拥有自己的内部实现和局部状态，但不能绕过平台任务控制面，也不能直接篡改平台 Task State 或自行宣布整个平台任务成功。
+
+原则三：借鉴 Harness 的便利性，但不复制 Harness
+----------------------------------------------
+
+DeepSeek Harness 的“Everything is a plugin”、配置组合、Provider 替换和可追踪运行值得参考，但本项目已有本地桌宠、API 聊天、Character Runtime、插件市场和 Production Agent Runtime，不需要改造成同一种产品。
+
+当前只锁定功能层目标：
+
+- 模型、角色资源和能力可以方便选择与替换
+- 普通用户通过市场与预设直接使用，不需要理解底层插件图
+- 开发者可以逐步获得清晰、轻量的扩展接口
+- 现有 Runtime、权限、审批和 Evidence 继续复用
+- 外部 Harness 兼容属于可选能力，根据真实需求再实现
+
+如果未来接入完整 Harness，可以采用 Supervised Harness Native 等方案保留其原生特性；如果用户需求只需要类似功能，也可以通过现有 Runtime 和 Provider 合同实现，不要求 API、配置格式和内部架构与 DeepSeek 相同。
+
+
+四、项目新的整体架构
+--------------------
+
+推荐的长期结构为：
+
+    本地桌宠 / Character
+             │
+      配置模型 API 后直接聊天
+             │
+             ↓
+    Agent / Character Preset
+             │
+       ┌─────┼─────────────────┐
+       ↓     ↓                 ↓
+    Persona 资源包          Capability / Skill / MCP
+       │     │                 │
+       └─────┴────────┬────────┘
+                      ↓
+             Simple Composition Plan
+                      ↓
+          现有 Production Agent Runtime
+             权限 / 审批 / Trace / Evidence
+                      │
+        ┌─────────────┼──────────────┐
+        ↓             ↓              ↓
+    Character      Capability      Environment
+     Runtime          Host           Adapter
+
+    后续高级扩展（按需求增加）：
+
+    Agent Definition + Runtime Profile
+                      ↓
+             Advanced Composition Resolver
+                      ↓
+      可选 Planner / Provider / External Harness
+
+不同模块的核心职责：
+
+1. 本地桌宠与 API 聊天：继续作为默认入口，不依赖 Composer 或外部 Harness。
+2. Agent / Character Preset：把常用角色、模型和能力组合保存成普通用户可直接使用的预设。
+3. Simple Composition Plan：检查依赖、权限和兼容性，不要求第一阶段构建通用插件内核。
+4. Production Agent Runtime：继续拥有任务、安全、取消、审计和最终结果治理权。
+5. Capability Host：真正执行 Tool、Skill、MCP、Plugin 等能力。
+6. Environment Adapter：把 Agent 接入桌面、聊天、游戏或故事环境。
+7. Character Runtime：负责人格表现、关系、情绪、语音、动画和 Avatar。
+8. Agent Definition、Runtime Profile 和外部 Harness：作为高级扩展，在基础市场体验稳定后按真实需求增加。
+
+
+五、Agent Definition
+-------------------
+
+Agent Definition 是声明式、版本化的 Agent 身份与需求描述。
+
+建议包含：
+
+- Schema 版本
+- Agent ID、名称和显示信息
+- Agent 类型：Character、General、Coding、Research 等
+- Persona 引用
+- Model / Planner 需求
+- Memory Profile 引用
+- Knowledge Source 引用
+- Relationship / Emotion 配置引用
+- Capability Requirements
+- Avatar / Voice 引用
+- Environment Requirements
+- 可选 Runtime / Harness 偏好（高级字段，第一版不要求）
+- 权限声明
+- 行为和自动化规则
+- 依赖版本与兼容约束
+- 来源、签名和扩展字段
+
+Agent Definition 应描述需求，不应硬编码具体内置实现。例如：
+
+    requires:
+      - capability: desktop.observe
+        version: ">=1.0 <2.0"
+      - capability: memory.semantic
+        version: ">=2.0"
+      - capability: character.expression
+        version: ">=1.0"
+      - environment: desktop
+
+Composition Resolver 再将需求解析为具体 Provider：
+
+    desktop.observe
+        → builtin.desktop-observation
+
+    memory.semantic
+        → official.local-vector-memory
+
+    character.expression
+        → installed.live2d-expression-provider
+
+这样同一个 Agent 可以更换 Provider，而不需要修改身份定义。
+
+第一版 Agent Definition 必须是只读投影：
+
+- 从现有 PetConfig、Persona、Memory、Avatar、Voice、Skill 和 MCP 配置生成快照
+- 不替换现有配置真相源
+- 不迁移用户数据
+- 不改变 Runtime 行为
+- 不因为字段缺失而擅自填充高权限能力
+- 对未知扩展字段进行安全保留或明确拒绝，避免静默丢失
+
+
+五-A、高级 Agent Runtime Profile（可选远期能力）
+-----------------------------------------------
+
+如果未来需要多 Runtime、多个运行模式或外部 Harness，Agent Definition 与 Runtime Profile 应分离：
+
+    Agent Definition
+        回答 Agent 是谁、需要什么。
+
+    Agent Runtime Profile
+        回答这一部署如何运行、装载哪些插件和 Provider。
+
+Runtime Profile 建议包含：
+
+- Profile ID、版本和来源
+- executionMode：platform-orchestrated / supervised-harness-native
+- Planner / Harness Provider
+- Model Provider
+- Session Provider
+- Context / Prompt Assembly Provider
+- Loop Provider
+- Scheduling Provider
+- Storage / Memory Backend Provider
+- Sandbox Provider
+- Tool / Skill / Capability Consumer
+- UI Extension / Presentation Extension
+- 插件树、分组、隔离域和加载顺序
+- Provider 配置与版本锁定
+- Permission Gateway 映射
+- Session Event Stream Adapter
+- Resume / Fork / Replay 能力声明
+
+这些字段不是本地桌宠 API 聊天、基础插件市场或第一版 Agent Preset 的前置条件。当前可以只保留概念和兼容空间，不需要先实现完整插件图。
+
+同一个 Agent Definition 可以绑定不同 Runtime Profile，例如：
+
+    同一个 Coding Agent
+      ├─ Native Safe Profile
+      ├─ DeepSeek Standard Profile
+      ├─ DeepSeek Code Profile
+      └─ Minimal Benchmark Profile
+
+切换 Profile 不应改变 Agent 的身份、Persona 和长期关系；是否共享 Memory、Session 与工作区状态必须由显式策略决定，不能隐式继承。
+
+
+六、Capability Layer 与开放组合合同
+-----------------------------------
+
+当前项目的内置 Capability 和 Skill Registry 可以继续保留，但长期市场合同不能永久建立在封闭联合类型和固定注册表上。
+
+未来的 Capability Descriptor 建议至少包含：
+
+- 命名空间化 Capability ID
+- Capability Contract Version
+- Provider ID 与 Provider Version
+- 输入/输出 Schema
+- 风险等级
+- 是否只读
+- 所需权限范围
+- 是否要求用户审批
+- 支持的 Environment
+- 支持的 Runtime / Planner 范围
+- 超时、取消和并发语义
+- Evidence / Trace 能力
+- 资源预算和限制
+- 来源、签名、信任等级和撤销状态
+
+对于需要长期替换 Provider 的通用能力，推荐采用三角色结构：
+
+Service Definition：
+    定义稳定的 Request / Result、事件和服务合同。
+
+Service Provider：
+    提供具体实现，例如本地 Shell、远程 Shell、不同 Memory Backend。
+
+Consumer：
+    把服务暴露给模型、UI、Workflow 或另一个 Plugin。
+
+Provider 和 Consumer 只依赖 Service Definition，不直接依赖彼此。简单能力不应为追求形式而过度拆包；只有角色需要独立替换或演进时才拆分。
+
+需要统一的是它们向 Runtime 暴露能力的合同，而不是强行把概念合并：
+
+Tool：
+    一次可执行的原子操作。
+
+Skill：
+    可复用的高层能力、知识或确定性路由，可组合多个 Tool。
+
+MCP：
+    外部能力和服务协议。
+
+Plugin：
+    安装、扩展和生命周期边界，可提供 Tool、Skill、UI、资源或 Adapter。
+
+Capability：
+    上述实现向 Agent Runtime 暴露的稳定语义合同。
+
+Agent Pack：
+    声明式组合清单、依赖锁定和可选非执行资源，不是新的万能插件格式。
+
+长期目标应满足：
+
+    新增一个符合合同的 Capability Provider，原则上不需要修改 Runtime 核心代码。
+
+同时还应满足：
+
+    新增或替换 Session、Loop、Storage、Sandbox、Scheduling、UI Provider，
+    原则上不需要修改 Harness 或 Platform Runtime 核心代码。
+
+这一条是高级 Runtime Profile 的远期扩展目标，不是基础插件市场上线条件。第一阶段优先保证 Resource、Skill、MCP 和普通 Capability 可以安全安装、选择和复用。
+
+
+七、Composition Resolver 与 Agent Composition Plan
+-------------------------------------------------
+
+当用户创建组合预设或安装 Agent Pack 时，Agent Composer 不应直接拼接配置后立即执行，而应先由独立、无副作用的 Resolver 生成 Agent Composition Plan。普通本地桌宠直接选择模型 API 聊天不需要强制经过完整 Composer。
+
+Composition Plan 需要完成：
+
+1. 解析 Agent Definition。
+2. 查找匹配的已安装 Provider。
+3. 解析直接依赖和传递依赖。
+4. 检查版本、平台和 Environment 兼容性。
+5. 检查缺失、冲突、循环依赖和已撤销版本。
+6. 计算权限并集和风险摘要。
+7. 检查所选 Runtime / Planner 可用性。
+8. 锁定实际使用的 Provider 和版本。
+9. 生成可审计、可重复的组合结果。
+10. 明确给出可运行、不可运行或需要用户选择的原因。
+
+未来启用高级 Runtime Profile 或外部 Harness 时，再扩展：
+
+- 解析完整插件树、分组和隔离域
+- 检查 Service Definition、Provider 与 Consumer 的依赖
+- 标记 ACTIVE、PENDING、DISABLED、BLOCKED 等运行时插件状态
+- 检查 Harness 兼容性
+
+第一阶段必须保持：
+
+- 确定性
+- 无网络下载
+- 无包安装
+- 无第三方代码执行
+- 无正式配置写入
+- 可单元测试
+
+只有用户确认 Resolved Agent Plan 后，平台才进入安装、审批或执行阶段。
+
+生产组合与开发组合应分开：
+
+生产组合：
+    只使用通过准入、版本锁定和安全检查的资源、能力与可执行包。
+
+本地 Developer Preview：
+    允许在隔离开发环境中装载本地插件、查看依赖状态、重新配置和热重载；不能因此获得正式市场信任或默认高风险权限。
+
+如果后续确实引入通用运行时插件图，再考虑支持：
+
+- stable entry ID
+- mount / unmount / reconfigure
+- dependency injection 与 PENDING 状态
+- group 与 service isolation
+- 自动 effect cleanup
+- 局部配置差异应用
+- 开发环境 HMR
+- 插件注册表与诊断
+
+
+八、Agent Composer / Agent Studio
+--------------------------------
+
+Agent Composer 的长期目标是允许用户组合：
+
+- Model
+- Agent / Character Preset
+- Persona
+- Memory
+- Knowledge
+- Skills / Capabilities
+- MCP / Plugins
+- Avatar
+- Voice
+- Environment
+- Runtime Policy
+
+高级模式以后可以增加：
+
+- Planner / Harness
+- Runtime Profile / Mode
+- Session / Loop / Storage / Sandbox Provider
+- 插件分组与隔离策略
+
+第一版应当是简单的 Preset Builder 与只读 Preview，不是完整低代码 Harness 平台。
+
+第一版 Preview 展示：
+
+- 使用哪些组件及具体版本
+- 每个能力由哪个 Provider 提供
+- 哪些依赖缺失或冲突
+- 哪些组件来源未受信任或已撤销
+- 将申请哪些权限
+- 哪些能力需要审批
+- 支持哪些 Environment
+- 当前能否运行以及阻塞原因
+
+高级诊断以后再展示：
+
+- 最终插件树及 ACTIVE / PENDING / DISABLED 状态
+- Session、Loop、Storage、Sandbox 和 UI Provider
+- 是否支持 Resume / Fork / Replay
+
+不应在第一版中：
+
+- 自动下载依赖
+- 自动安装第三方代码
+- 自动扩大权限
+- 覆盖现有角色正式配置
+- 绕过市场准入
+- 把预览结果直接当成执行授权
+
+面向用户可分为：
+
+Beginner Mode：安装经过审核的 Agent Blueprint / Agent Pack。
+
+Advanced Mode：替换模型、Persona、Memory、Capability、Avatar 和 Environment。
+
+Developer Mode：开发 Provider、Skill、Plugin、MCP 和 Adapter，并查看完整合同与诊断。
+
+Creator Mode：在隔离的本地开发环境中检查当前 Runtime Profile、试装插件、调整插件树并保存成新的运行模式或 Agent Preset。Creator Mode 不等于公开市场发布，也不自动授予高风险权限。
+
+便利性要求：
+
+- 普通用户可以从 Agent Blueprint / Runtime Profile 一键生成预检计划，不需要理解插件依赖图。
+- 通过配置或可视化 Composer 切换 Provider，不要求修改平台或 Harness 源码。
+- 常用组合可以保存成可复用 Preset / Mode，并清楚显示与原配置的差异。
+- 缺失依赖、权限不足或版本冲突必须给出可操作原因，不能表现为静默无响应。
+- Developer Preview 的最小插件合同应足够轻量，简单插件不应被迫实现整套市场发布协议。
+- Native 与 Harness Profile 应共享启动、停止、恢复和诊断入口，避免用户面对两套完全不同的操作流程。
+
+
+九、插件市场升级为 Agent Ecosystem
+----------------------------------
+
+当前市场安全基础包括签名包、发布者目录、准入、安装/替换/卸载、回滚、健康检查、退避、隔离和 WASM 沙箱。
+
+但截至本次修订，当前外部执行面仍然很窄：
+
+- 市场正式发布保持禁用
+- 外部 Skill 仅支持受限的 WASM Runtime 类型
+- 真正开放的外部 Capability 非常有限
+- 普通声明式 permission scope 尚不等于能力已经实现
+
+因此当前系统应被准确描述为：
+
+    受控的外部 Skill 包运行安全底座
+
+而不是：
+
+    已经完成的开放式 Plugin / Agent Marketplace
+
+市场建议形成四类商品，并共用 Catalog、签名、版本、依赖、来源信誉和撤销基础设施。
+
+Level 1：Resource Package
+-------------------------
+
+包括：
+
+- Avatar
+- Voice
+- Persona Template
+- Memory Template
+- Prompt
+- Animation / Motion / Expression
+- Scene / Background
+
+默认不包含可执行代码，风险最低，可优先开放。
+
+Level 2：Capability Package
+---------------------------
+
+包括：
+
+- Tool
+- Skill
+- MCP Adapter / Configuration
+- Plugin
+- Connector
+- Runtime Capability Provider
+
+这类商品可能执行代码或访问外部系统，必须继续走沙箱、权限、审批、审计、Evidence 和隔离链路。
+
+Level 3：Agent Blueprint / Character Pack
+-----------------------------------------
+
+包括：
+
+- 声明式 Agent Definition
+- Character Definition
+- Persona、Memory、Voice、Avatar 等资源引用
+- Capability Requirements
+- Environment Requirements
+
+Blueprint 自身不应携带未经独立准入的任意执行代码。
+
+Level 4：Agent Pack
+-------------------
+
+包括：
+
+- Agent Definition
+- 依赖清单和版本锁定
+- Provider 选择建议
+- 权限摘要
+- 来源与签名
+- 可选内嵌的非执行资源
+
+Agent Pack 内引用的可执行 Capability 仍然必须作为独立包完成准入。不能因为被装入 Agent Pack 就继承整包信任。
+
+
+十、Agent Pack 示例
+------------------
+
+【桌面女仆 Character Agent】
+
+    Persona
+      └─ Maid Persona
+
+    Memory
+      └─ Long-term Character Memory
+
+    Avatar / Voice
+      ├─ Live2D
+      └─ TTS
+
+    Capability Requirements
+      ├─ calendar.read
+      ├─ music.control
+      └─ desktop.observe
+
+    Environment
+      └─ Desktop
+
+【程序员 Agent】
+
+    Model / Planner
+      └─ User-selected compatible provider
+
+    Capability Requirements
+      ├─ coding.assist
+      ├─ git.read
+      ├─ terminal.execute
+      └─ browser.research
+
+    Memory
+      └─ Project Memory
+
+    Environment
+      └─ Coding / Desktop
+
+【科研 Agent】
+
+    Memory / Knowledge
+      └─ Academic RAG
+
+    Capability Requirements
+      ├─ web.search
+      ├─ pdf.analyze
+      └─ citation.compose
+
+【Galgame Character】
+
+    Character
+      ├─ Persona
+      ├─ Relationship
+      ├─ Memory
+      ├─ Emotion
+      ├─ Dialogue
+      ├─ Event
+      ├─ Voice
+      └─ Animation
+
+    Environment
+      └─ Story / Galgame
+
+这些示例中的能力都应通过需求与 Provider 解析连接，不能写死为某一个内置实现。
+
+
+十一、Production Agent Runtime 的正确边界
+-----------------------------------------
+
+现有 Production Runtime 继续作为默认任务控制面，服务本地桌宠 API 聊天、Agent 任务、权限审批、恢复和 Evidence。平台升级不要求先增加第二种 Runtime。
+
+如果未来确实接入拥有完整 Session 和 Loop 的外部 Harness，可以再引入 Platform Task Envelope 与 Execution Session State 的两层边界；以下设计用于保留兼容空间，不是当前插件市场升级的前置工程。
+
+完整 Harness 接入时需要区分两层状态：
+
+Platform Task Envelope：
+    平台拥有的外层任务身份、权限上限、预算、取消、审计锚点和最终收口状态。
+
+Execution Session State：
+    Native Runtime 或外部 Harness 内部的 Session、Loop、Subagent、Context、Storage 和局部执行状态。
+
+Platform Orchestrated 模式下，两层状态可以由现有 Production Runtime 紧密协调。
+
+Supervised Harness Native 模式下，外部 Harness 拥有 Execution Session State，平台不能逐步重解释或篡改其原生 Loop，只能通过明确的监督合同控制外层边界。
+
+在该高级模式中，平台应拥有的外层最终权威：
+
+- Platform Task ID 和 Task Envelope 生命周期
+- 用户授予的权限上限和 Permission Gateway
+- 总资源预算、取消和超时
+- 用户审批及审批后续
+- 跨边界副作用的准入
+- Trace / Evidence 的审计锚点和统一查询入口
+- Harness 崩溃、失联和超限后的外层处置
+- 平台最终成功、失败、取消和阻塞状态
+
+Platform Orchestrated 模式下，现有 Production Runtime 继续拥有：
+
+- Task State Record 和合法状态转换
+- 任务阶段和 Subgoal 状态
+- Capability 调度事务
+- Recovery / Verification 的授权与调度
+- 细粒度 Evidence 收集与结果判断
+
+Supervised Harness Native 模式下，Harness 可以拥有：
+
+- 原生 Session 和 Context 组装
+- 原生 Agent Loop 和 Subagent Scheduling
+- 原生 Plugin Tree 与服务依赖
+- 原生 Storage 和内部 Memory
+- 原生 UI Extension 和运行模式
+- 原生 Resume / Fork / Replay
+
+平台不能要求 Harness 把上述每个内部步骤重新映射成现有 Production Session 的内部状态。平台只要求其提供监督事件、权限请求、取消确认、资源计量、Evidence 摘要和终局结果。
+
+Runtime 不应实现：
+
+- 市场搜索、安装、升级和回滚
+- AgentDefinition 依赖解析
+- 具体模型 API
+- 具体 Planner / Harness 算法
+- 具体 Memory 数据库
+- MCP / WASM / Native 子进程内部实现
+- Avatar、Voice、Animation 的具体执行
+- Environment 的业务细节
+- Composer UI 和预览逻辑
+- 第三方插件的内部计算
+- 外部 Harness 原生 Session、Loop 和插件图的镜像副本
+
+建议职责矩阵：
+
+职责                     平台控制面       Native Runtime    Harness/Provider    Composer/市场
+-----------------------  --------------  ----------------  ------------------  -------------
+Platform Task Envelope   最终权威         提交细粒度状态     只报告监督状态       不负责
+原生 Execution Session   只设边界         Native 模式主责    Harness 模式主责      不负责
+权限与审批               最终权威         发起或消费请求     不得绕过 Gateway      展示预估
+依赖与插件图解析         不负责           提供内置元数据     提供插件元数据         主责
+能力与 Loop 实现         不负责           Native 模式实现    Harness/Provider 主责  不负责
+包安装、升级和撤销       不负责           不负责             配合生命周期           主责
+Session 原始事件         统一接入规范     产生               产生或适配             查询展示
+Trace 与 Evidence        审计锚点         细粒度产生         原生流与摘要           查询展示
+平台最终任务结果         最终收口         提交候选结果       提交候选结果           不负责
+
+需要长期警惕 Runtime 过重的信号：
+
+- 增加一种市场商品就必须修改任务状态机
+- 增加一个 Provider 就必须修改 Production Session 主循环
+- Runtime 核心出现具体插件、模型厂商或市场商品名称
+- Runtime 直接查询市场 Catalog 或负责下载安装
+- Runtime 直接管理 MCP / WASM 子进程细节
+- Runtime 根据 Avatar 或 Environment 类型持续增加分支
+- Provider 崩溃使 Task State 无法恢复
+- 测试任务状态转换必须启动全部外部系统
+- 为接入 Harness 而逐个复制其 Session、Loop、Storage 或插件状态
+- 平台每次升级都要求第三方 Harness 社区插件跟随重写
+
+
+十二、Planner、Harness 与 Runtime Adapter
+--------------------------------------
+
+外部 Harness 是可选兼容方向，不是本项目当前正常聊天、插件市场或 Agent Preset 的依赖。兼容外部 Harness 不等于依赖单一 Harness，也不等于建立第二套无约束生产 Runtime。
+
+如果以后出现明确需求，可以选择两类执行 Profile。
+
+Profile A：Platform Orchestrated
+--------------------------------
+
+    Platform Runtime
+        ↓
+    Harness Adapter 生成下一步决策
+        ↓
+    Platform Runtime 校验合同、权限和预算
+        ↓
+    Capability Host 执行
+        ↓
+    Platform Runtime 提交状态和 Evidence
+
+这种方式风险最低，适合当前 Native Runtime、桌面操作和需要细粒度审批、恢复与 Verification 的任务。
+
+Profile B：Supervised Harness Native
+------------------------------------
+
+当外部 Harness 以完整插件图运行时：
+
+    Platform Runtime Control Plane
+        ↓
+    创建有边界的 Harness Task Capsule
+        ↓
+    Harness 装载原生 Runtime Profile 和插件图
+        ↓
+    原生 Session / Loop / Storage / Scheduling / UI 继续运行
+        ↓
+    跨越平台安全边界的操作经过 Permission Gateway
+        ↓
+    Harness 输出 Session Event Stream、Evidence 摘要和候选结果
+        ↓
+    Platform Control Plane 完成审计和最终收口
+
+平台应尽量保留 Harness 原生：
+
+- 插件配置格式和完整插件树
+- Model、Tool、Skill、Session、Sandbox、Storage、Loop、Scheduling 和 UI 插件
+- Standard、Code、Minimal、Creator 等运行模式或同类 Preset
+- Provider 替换和服务依赖
+- 插件 mount / unmount / reconfigure
+- 原生 Session Event Stream
+- Resume / Fork / Search / Replay
+- 社区插件兼容性
+
+Harness 不得：
+
+- 自行扩大权限
+- 伪造用户审批
+- 绕过跨边界 Permission / Capability Gateway
+- 直接写平台 Task State
+- 把局部成功当成平台最终成功
+- 在取消后继续产生副作用
+- 隐藏资源消耗和外部副作用
+
+不应要求 Harness：
+
+- 把每个内部插件逐个重写成平台原生 Tool
+- 把原生 Session 状态复制成 Production Runtime 内部状态
+- 让平台重新规划其每一个内部步骤
+- 放弃原生运行模式、Creator 体验和社区插件
+
+只有当产品明确宣称“原生兼容某个完整 Harness”时，才需要使用以下无损接入验收条件：
+
+1. 能装载完整 Harness Runtime Profile，而不是只能调用一个简化 Tool Adapter。
+2. 能保留原生 Model、Tool、Skill、Session、Loop、Storage、Sandbox、Scheduling 和 UI 组合。
+3. 能切换 Standard、Code、Minimal、Creator 等类似模式。
+4. 能在不修改 Agent Definition 的情况下替换兼容 Provider。
+5. 能保留并查询原生 Session Event Stream。
+6. 能支持 Harness 原生 Resume、Fork、Search 和 Replay。
+7. 平台取消后，Harness 停止新的副作用并返回取消确认。
+8. 文件、Shell、桌面、网络等高风险边界仍受平台权限控制。
+9. Harness 升级不要求重写全部社区插件 Adapter。
+10. Harness 不可用或崩溃时，不影响 Native Runtime 和其他 Agent。
+
+因此需要锁定的表述是：
+
+    不建立第二套竞争性的生产任务控制面；
+    允许多个可插拔 Planner、Harness、Capability Host 和 Environment Runtime；
+    外部 Harness 可以保留完整原生插件图和执行 Session，
+    平台只统一外层任务、安全、取消、审计和最终收口。
+
+不建议现在开发生产级 DeepSeek Harness Adapter，也不要求为了未来兼容提前完成完整 SPI。当前只需避免在公共合同中写死单一模型供应商或单一能力实现；等插件市场、Preset 和 Capability 合同稳定，并出现真实用户需求后，再建立只读样本或 Supervised Harness Native 实验。
+
+十二-A、高级 Session Event Stream（按需求增加）
+-------------------------------------------
+
+现有 Trace / Evidence 继续满足当前生产任务需要。只有在需要跨 Runtime 查询、Resume、Fork、Replay 或完整 Harness 兼容时，再增加版本化的 Session Event Envelope，以统一查询和审计，而不是统一内部实现。
+
+事件可以覆盖：
+
+- system / developer / user context
+- model input 与 output
+- reasoning summary 或受允许的决策记录
+- tool / capability request 与 result
+- permission request、approval、denial
+- subagent scheduling
+- context injection
+- lifecycle、progress、cancel 和 timeout
+- evidence reference
+- terminal candidate 与平台最终结果
+
+事件流要求：
+
+- append-only
+- stable event ID、session ID、task ID 和 parent ID
+- 记录来源：platform / native-runtime / harness / provider / environment / user
+- 支持 Adapter 保留 Harness 原生事件引用
+- 敏感字段分级、最小化、脱敏和保留期限
+- Resume / Fork / Search / Replay 基于同一事件流或可验证映射
+- 平台不能伪造 Harness 原生事件，Harness 也不能伪造平台审批事件
+
+统一事件流不是把全部原始推理、密钥、文件内容或隐私数据永久保存。记录范围必须服从保密、最小化和用户数据治理规则。
+
+
+十三、Character Runtime 与 Environment
+------------------------------------
+
+升级为通用 Agent Platform 不应削弱角色系统。Character Runtime 仍然是项目最重要的差异化之一。
+
+Character Runtime 可以包括：
+
+- Persona
+- Long-term Memory
+- Relationship
+- Emotion / State
+- Dialogue
+- Voice
+- Animation
+- Avatar
+- Social Simulation
+
+普通 Computer Agent 更接近：
+
+    Agent → Computer
+
+Character Agent 更接近：
+
+    Character → Environment / World
+
+桌面只是第一个 Environment，不应把当前 Runtime World 直接等同于完整通用 Environment API。
+
+未来可支持：
+
+- Desktop Environment
+- Chat Environment
+- Game Environment
+- Story / Galgame Environment
+- Browser Environment
+- Coding Environment
+- Virtual World
+
+同一个 Agent 可以在多个 Environment 中呈现，但需要明确 Environment Binding：
+
+- 支持哪些事件
+- 暴露哪些 Capability
+- 有哪些表现通道
+- 有哪些状态同步规则
+- 哪些操作需要审批
+- Environment 离线或切换时如何处理任务
+
+Desktop Environment 中现有 Live2D、3D、语音、桌面窗口和 Runtime World 可以作为第一批适配对象，而不是被重新实现。
+
+
+十四、多角色、World 与 Social Simulation
+----------------------------------------
+
+多角色系统可以继续演进为：
+
+                    World
+                      │
+        ┌─────────────┼─────────────┐
+        ↓             ↓             ↓
+   Character A   Character B   Character C
+        │             │             │
+        └─────────────┼─────────────┘
+                      ↓
+                Relationship
+                      ↓
+               Social Simulation
+                      ↓
+                 Group Chat
+                      ↓
+                  Director
+                      ↓
+                   Scene
+
+World / Director 可以组织角色互动，但不能成为绕过 Agent Runtime 权限和任务状态的新执行入口。
+
+
+十五、安全和市场开放原则
+----------------------
+
+开放 Agent 平台比普通资源市场危险得多，尤其涉及：
+
+- 文件系统
+- Shell / Terminal
+- 浏览器
+- 鼠标键盘
+- 网络
+- 外部 API
+- 长期记忆
+- 自动化任务
+- 第三方本地进程
+
+必须坚持：
+
+1. Read-only first。
+2. 高风险能力默认禁用或要求明确审批。
+3. Capability 声明不等于 Capability 已经实现或已经获准执行。
+4. 包签名不等于代码安全，只代表来源和完整性可验证。
+5. Agent Pack 信任不能自动传递给其中的可执行依赖。
+6. 权限按能力、Provider、版本和 Environment 计算，不采用整包无限授权。
+7. 所有高风险执行必须产生可审计结果和 Evidence。
+8. 支持取消、超时、崩溃恢复、隔离、撤销和回滚。
+9. 市场正式发布开关必须在完整证据之前保持关闭。
+
+开放第三方执行前至少需要：
+
+- 沙箱边界和逃逸测试
+- 权限拒绝、撤销和重新审批测试
+- 超时、取消、崩溃和重启测试
+- 安装、升级、降级、回滚和卸载测试
+- 恶意或已撤销 Publisher 处置流程
+- Evidence / Trace 完整性验证
+- 真实打包环境和长时间 soak
+- Capability 合同兼容性测试
+
+
+十六、分阶段整改路线
+--------------------
+
+Phase 0：术语、目标和架构边界
+--------------------------------
+
+产出：
+
+- 统一术语表
+- Runtime Responsibility Matrix
+- 锁定“本地桌宠 + API 聊天 + 插件市场”为当前产品主线
+- Agent Definition、Preset、Capability、Provider、Plugin、Skill、MCP、Agent Pack 的边界
+- 单一任务控制面原则
+- DeepSeek Harness 只作参考、不作为第一阶段实现模板的边界
+- 市场商品类型与安装包格式分离原则
+
+本阶段不改变运行行为。
+
+Phase 1：只读 Agent Definition v0
+---------------------------------
+
+目标：
+
+- 从现有配置生成 AgentDefinition 快照
+- 覆盖 Persona、Model、Memory、Skill、MCP、Avatar、Voice 和 Environment
+- 支持诊断与导出
+- 不替换 PetConfig，不迁移用户数据，不进入执行
+- 现有桌宠选择模型 API 后直接聊天的路径完全不变
+
+验收：同一个现有角色可以被稳定、可重复地描述，且生成快照不改变任何运行结果。
+
+Phase 2：Capability Descriptor v1
+---------------------------------
+
+目标：
+
+- 为现有内置 Capability、Skill、MCP 和 Tool 生成统一描述符
+- 引入命名空间、版本、风险、权限、Schema、Environment 和 Evidence 元数据
+- 明确 Service Definition、Service Provider 和 Consumer 三角色模式
+- 暂时保留现有生产执行 ID，通过 Adapter 映射
+
+验收：新增或替换一个 Provider 不要求重写 Runtime 状态机，Consumer 不直接依赖具体 Provider。
+
+Phase 3：Simple Composition Plan 与 Preset Preview
+--------------------------------------------------
+
+目标：
+
+- 实现确定性、无副作用的依赖和兼容性校验
+- 生成 Provider 锁定、权限并集、风险摘要和阻塞原因
+- 允许用户选择 Model、Persona、Memory、Capability、Avatar、Voice 和 Environment
+- 保存并预览简单 Agent / Character Preset
+- 不下载、不安装、不执行第三方代码
+
+Phase 4：Marketplace 商品模型与浏览体验
+----------------------------------------
+
+目标：
+
+- 增加 Resource、Capability、Character Pack、Agent Blueprint / Agent Pack 分类
+- 完成来源、版本、依赖、兼容性、权限和风险展示
+- 普通用户可以从市场商品直接生成安装预检或 Preset
+- 不因为增加分类就提前打开正式市场发布
+
+Phase 5：低风险 Resource / Character Pack
+------------------------------------------
+
+目标：
+
+- 优先支持 Avatar、Voice、Persona、Animation、Prompt 和非执行资源
+- 支持安装、替换、卸载、版本检查和回滚
+- 支持 Character Pack 组合预览
+- 不包含任意第三方执行代码
+
+Phase 6：Capability / Skill / MCP 受控扩展
+------------------------------------------
+
+目标：
+
+- 复用现有 Capability、Skill、MCP、权限、审批、沙箱和 Evidence 链路
+- 从只读、低风险能力开始灰度
+- 一个能力可以被多个桌宠、角色和 Agent Preset 复用
+- 不要求先建立通用 Runtime Plugin Graph
+
+Phase 7：声明式 Agent Blueprint / Agent Pack
+---------------------------------------------
+
+目标：
+
+- 支持 Agent Blueprint / Agent Pack 导入、导出和隔离预览
+- 第一阶段只包含声明式定义和非执行资源
+- 可执行依赖继续独立准入
+- 不覆盖正式配置，不自动安装第三方依赖
+- 安装后能够通过当前 Production Runtime 与本地桌宠直接使用
+
+Phase 8：内部 Developer Preview SDK
+------------------------------------
+
+目标：
+
+- 提供最小 Capability / Provider / Consumer 和 Plugin 生命周期合同
+- 支持隔离环境中的本地插件测试与诊断
+- 根据实际开发体验逐步增加重新配置、effect cleanup 和 HMR
+- 本地开发不等于正式市场信任，不自动获得高风险权限
+
+验收：由非 Runtime 核心代码实现一个可替换 Provider，并在不修改 Runtime 主循环的情况下完成装载和替换。
+
+Phase 9：高级 Runtime 能力（按真实需求选择）
+--------------------------------------------
+
+可选内容：
+
+- Agent Runtime Profile
+- 完整 Plugin Graph
+- Session / Loop / Storage / Sandbox / Scheduling / UI Provider
+- append-only Session Event Stream
+- Resume / Fork / Search / Replay
+- Creator Mode 与更完整的 HMR
+
+只有真实用户和开发者需求足以证明价值时才进入，不作为基础市场完成条件。
+
+Phase 10：外部 Harness 兼容研究（可选）
+---------------------------------------
+
+目标：
+
+- 根据用户需求判断是实现类似功能，还是接入真实 Harness
+- 优先验证配置组合、Provider 替换和操作便利性
+- 只有明确需要原生兼容时，才研究 Supervised Harness Native SPI
+- 不要求 API、插件格式、Cordis 内核或 UI 与 DeepSeek Harness 相同
+- 不影响 Native Runtime、本地桌宠聊天和插件市场主线
+
+
+十七、当前明确不建议做的事情
+----------------------------
+
+1. 不直接推翻或重写现有 Production Runtime。
+2. 不围绕 AgentSessionV2 建立新的长期公共协议。
+3. 不创建第二套竞争性的生产任务状态和审批链路。
+4. 不把市场、Composer、依赖解析继续塞进 Production Session。
+5. 不把 DeepSeek Harness Adapter 当成当前插件市场升级的前置任务。
+6. 不把 Plugin、Skill、MCP、Tool 强行合并成同一种实现。
+7. 不把现有 Skill Package 直接改名为 Agent Pack。
+8. 不扩大外部 Skill 权限来做市场演示。
+9. 不在安全证据不足时打开正式市场发布。
+10. 不先重做市场 UI，再反推底层对象模型。
+11. 不立即把现有用户配置迁移为新的 Agent Definition 真相源。
+12. 不让 Agent Pack 绕过其中每个可执行依赖的独立准入。
+13. 不为了模仿 DeepSeek Harness 而重写现有插件系统、Runtime 或桌宠聊天链路。
+14. 如果未来接入完整 Harness，不把其每个内部插件逐个改写成平台原生 Tool。
+15. 不把“Everything is a plugin”设为本项目所有模块必须遵守的硬性规则。
+
+
+十八、主要风险与应对
+--------------------
+
+风险 1：Runtime 继续膨胀
+
+应对：Runtime 只保留控制面权威；Provider、Resolver、市场和 Environment 独立演进。
+
+风险 2：市场看似丰富但只能固定槽位换皮
+
+应对：Capability 使用开放、命名空间化、版本化合同；Agent Definition 声明需求而不是硬编码实现。
+
+风险 3：自由组合产生不可控兼容矩阵
+
+应对：Composition Resolver、版本约束、Provider Lock、Compatibility Test 和明确失败原因。
+
+风险 4：外部 Harness 形成第二套治理链路
+
+应对：当前不引入外部 Harness；未来确有需求时再选择 Planner Adapter 或 Supervised Harness Native，并由平台保留权限上限、取消、审计和最终收口。
+
+风险 5：Agent Pack 成为安全绕过通道
+
+应对：组合包信任与可执行包准入分离，权限按实际依赖重新计算。
+
+风险 6：普通用户面对过高复杂度
+
+应对：Beginner / Advanced / Developer 分层；普通用户安装 Blueprint，高级用户才进入详细组合。
+
+风险 7：过早抽象导致重复返工
+
+应对：先用只读投影和 Preview 验证合同，不立即迁移配置或接管生产执行。
+
+风险 8：安全边界破坏 Harness 原生便利性
+
+应对：只有未来宣称原生兼容完整 Harness 时才处理该风险；普通类似功能直接使用现有 Runtime 和 Capability 合同，不承担原生兼容成本。
+
+风险 9：合同只被官方内部实现验证，形成伪开放接口
+
+应对：在 Phase 8 提供内部 Developer Preview SDK，并用独立 Provider 验证可替换性；不要求用外部 Harness 才能证明接口开放。
+
+风险 10：Session Event Stream 记录过度
+
+应对：append-only 不等于永久保存全部原始推理、密钥和文件内容；必须实施数据最小化、敏感字段分级、脱敏、保留期限和用户删除策略。
+
+
+十九、需要继续讨论的产品决策
+----------------------------
+
+以下问题不应在实现中默认替用户决定：
+
+1. 市场初期是官方精选、审核制第三方，还是完全开放发布？
+2. Agent Pack 默认只引用依赖，还是允许内嵌部分资源？
+3. 同一 Agent 在多个 Environment 中是否共享全部 Memory 和 Relationship？
+4. 用户替换 Provider 后，Agent 是否仍被视为同一个 Agent？
+5. Agent Definition 中哪些字段属于身份，哪些属于部署实例？
+6. Persona、Memory 和 Relationship 的可移植边界是什么？
+7. 用户是否真的需要外部 Harness，还是现有 Runtime 提供类似功能已经足够？
+8. 市场的版本撤销、作者停更和依赖失效如何影响已安装 Agent？
+9. 商业授权、资源版权和 Provider 服务费用如何表达？
+10. 哪些 Capability 可以达到普通用户默认启用等级？
+11. 高级 Runtime Profile 是否有足够真实需求，还是先保持简单 Preset？
+12. 本地 Developer Preview 中插件可以获得哪些测试权限和隔离资源？
+13. 普通用户的市场安装流程怎样做到接近“一键安装并使用”？
+14. 什么时候才值得投入 Session Event Stream、Fork / Replay 或外部 Harness 兼容？
+
+
+二十、项目新的核心定位
+----------------------
+
+可以将项目长期定义为：
+
+    一个开放式 AI Agent / Character 平台，
+    以本地桌宠和 Character Agent 为核心，
+    用户配置模型 API 后即可聊天，并可以通过插件市场安装、组合和分享
+    Persona、Memory、Capability、Skill、MCP、Avatar、Voice 与 Agent Preset。
+
+产品第一目标是“直接可用、操作方便、能力可扩展”，不是实现一个与 DeepSeek Harness 相同的通用 Agent Harness。
+
+桌宠：
+
+    Character Agent + Desktop Environment
+
+Galgame：
+
+    Character Agent + Story Environment
+
+Coding Agent：
+
+    General Agent + Coding Environment + Coding Capabilities
+
+Research Agent：
+
+    General Agent + Research Capabilities + Knowledge / Memory
+
+项目的竞争重点不应只是：
+
+    谁的模型更强
+    谁的 Agent benchmark 更高
+    谁更会操作电脑
+
+更适合长期建立的价值是：
+
+    谁能让用户安全地创造、组合、运行、培养和分享
+    更多样、更长期存在、更有角色生命力的 Agent。
+
+
+二十一、最终愿景
+----------------
+
+最终系统可以形成：
+
+    Model              = 大脑与基础推理能力
+    Capability         = 可复用能力
+    Character          = 身份与人格
+    Memory             = 经验
+    Relationship       = 社会关系
+    Avatar / Voice     = 身体与表达
+    Environment        = 所处世界
+    Runtime Control    = 任务治理、安全、取消、审计与最终收口
+    Platform           = 组合、管理和分发这些部分的系统
+
+可选高级能力：
+
+    Planner / Harness  = 在出现真实需求时增加的替代决策或执行后端
+    Runtime Profile    = 多运行模式和完整插件图的部署组合
+    Session Event      = 跨 Runtime 追踪、Resume、Fork / Replay 的运行记录
+
+用户可以创造：
+
+- 一个桌宠
+- 一个长期助手
+- 一个程序员或科研 Agent
+- 一个游戏角色
+- 一个 Galgame 世界中的角色
+- 多个长期共存的人格
+- 一个带关系和社会模拟的 Character World
+- 或者完全不同的新型 Agent
+
+开发者可以提供：
+
+- 一个 Tool
+- 一个 Skill
+- 一个 MCP / Connector
+- 一个 Capability Provider
+- 一个 Plugin
+- 一个 Persona / Memory / Avatar / Voice Resource
+- 一个 Character Pack
+- 一个 Agent Blueprint / Agent Pack
+- 一个 Planner / Harness / Environment Adapter
+- 一个 Session / Loop / Storage / Sandbox / Scheduling / UI Provider
+- 一个完整 Runtime Profile / Mode Preset
+
+其中后三类属于可选高级生态，不是每个开发者或普通用户必须面对的对象。
+
+最终组合关系是：
+
+    Model
+      ×
+    Persona
+      ×
+    Memory
+      ×
+    Capability Providers
+      ×
+    Character Resources
+      ×
+    Environment
+      ×
+    Safe Runtime Governance
+      =
+    User-defined Agent
+
+如果未来需要，还可以在上述基础组合中加入 Planner / Harness 与 Runtime Profile；它们是扩展项，不改变本地桌宠、API 聊天和插件市场的核心路径。
+
+这条路线优先保证插件市场能够方便地为桌宠和 Character Agent 增加资源与能力，同时保留 Provider 替换、配置组合和未来高级 Runtime 的扩展空间；既不复制 DeepSeek Harness，也不封死以后借鉴或兼容它的可能性。
+
+
+二十二、DeepSeek Harness 参考边界
+--------------------------------
+
+DeepSeek Harness 是设计参考之一，不是项目验收基准。项目只选择对本地桌宠和插件市场有实际价值的能力，不要求实现相同 API、Cordis 内核、配置格式、插件范围或 UI。
+
+可借鉴的设计特征                       本项目采用方式
+--------------------------------------  ------------------------------------------
+Everything is a plugin                  借鉴可替换思想，不设为全项目硬规则
+模型、工具、Skill 可替换                Capability Contract + Provider Resolution
+Session、Loop、Storage 等可替换          仅作为可选高级 Runtime Profile
+通过配置选择和重组能力                  Agent Runtime Profile + Composition Resolver
+Definition / Provider / Consumer         三角色 Capability 合同
+依赖注入与等待 Provider                 Plugin Graph dependency + PENDING 状态
+插件挂载、卸载和自动清理                生命周期合同 + effect cleanup
+分组和服务隔离                          Plugin group + service isolation
+开发环境快速试验和 HMR                  Creator Mode + Developer Preview SDK
+Standard / Code / Minimal / Creator     Runtime Mode / Preset
+配置切换且不修改 Harness 源码            Runtime Profile + Composition Resolver
+快速启动与普通用户低复杂度              Preset、预检计划与统一运行入口
+完整运行可追踪                          append-only Session Event Stream
+Resume / Fork / Search / Replay         Session Event Adapter 与统一查询
+社区插件可复用                          先建设本项目市场生态；原生兼容按需求研究
+
+本项目需要长期保留的结论：
+
+1. 普通用户配置模型 API 后可以直接与本地桌宠聊天。
+2. 市场商品可以方便安装、预览、卸载、回滚和组合。
+3. Skill、MCP 和 Capability 可以被多个角色与 Agent Preset 复用。
+4. 开发便利性与公开市场信任分开，安全审核不能让本地开发接口变得不可用。
+5. 只要功能类似且操作方便，就不要求内部实现与 DeepSeek Harness 相同。
+6. 只有未来明确宣称原生兼容某个 Harness 时，才启用第十二节的无损接入验收条件。
+
+参考的官方公开资料（截至 2026-08-16，DeepSeek Harness 仍处于 Developer Preview，API 可能继续变化）：
+
+- https://deepseek.com/harness/en/
+- https://deepseek-harness.github.io/deepseek-harness/en/guide/quickstart
+- https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/
+- https://deepseek-harness.github.io/deepseek-harness/en/develop/practice/
+- https://deepseek-harness.github.io/deepseek-harness/en/develop/cordis-tutorial/06-composition-and-hmr
+
+因此本方案锁定的是本地桌宠体验、插件市场、简单组合、Provider 可替换和安全治理。DeepSeek Harness 相关内容只用于避免未来架构被完全封死，不构成当前实施承诺。
